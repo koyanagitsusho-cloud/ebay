@@ -1,0 +1,39 @@
+# ─── Web フレームワーク ───
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+
+# ─── データベース ───
+sqlalchemy==2.0.30
+asyncpg==0.29.0           # PostgreSQL非同期ドライバ
+aiosqlite==0.20.0         # SQLite非同期ドライバ（テスト用）
+alembic==1.13.1
+
+# ─── バリデーション・設定 ───
+pydantic==2.7.1
+pydantic-settings==2.2.1
+
+# ─── 認証 ───
+bcrypt==4.1.3
+python-jose[cryptography]==3.3.0
+
+# ─── HTTP クライアント ───
+httpx==0.27.0
+
+# ─── 非同期ジョブ ───
+celery[redis]==5.4.0
+redis==5.0.4
+
+# ─── AI ───
+anthropic==0.28.0
+
+# ─── ログ ───
+structlog==24.1.0
+
+# ─── ユーティリティ ───
+python-multipart==0.0.9  # ファイルアップロード用
+
+# ─── 開発・テスト（本番には不要だが requirements.txt に含める） ───
+# 本番では requirements-dev.txt を別に用意することを推奨
+pytest==8.2.0
+pytest-asyncio==0.23.6
+httpx==0.27.0             # テスト用クライアント（上と重複だが明示）

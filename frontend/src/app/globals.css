@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 危険操作のボタンを目立たせるスタイル */
+.btn-danger {
+  @apply bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded border-2 border-red-800;
+}
+
+/* dry-run バッジ */
+.badge-dry-run {
+  @apply inline-flex items-center px-2 py-1 text-xs font-bold bg-yellow-200 text-yellow-800 rounded border border-yellow-400;
+}
+
+/* 本番バッジ */
+.badge-production {
+  @apply inline-flex items-center px-2 py-1 text-xs font-bold bg-red-200 text-red-800 rounded border border-red-400;
+}
+
+/* ステータスバッジ */
+.status-draft { @apply bg-gray-100 text-gray-800; }
+.status-pending_review { @apply bg-yellow-100 text-yellow-800; }
+.status-approved { @apply bg-green-100 text-green-800; }
+.status-rejected { @apply bg-red-100 text-red-800; }
+.status-published { @apply bg-blue-100 text-blue-800; }
