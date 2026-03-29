@@ -37,17 +37,18 @@ class AutoResearchSettingsResponse(BaseModel):
     ebay_configured: bool
 
 
-@router.get("/server-ip", summary="このサーバーの外部IPを確認する")
-async def get_server_ip(
-    current_user: User = Depends(get_current_user),
-) -> dict:
-    """Railway サーバーの外部IPアドレスを返す（楽天IP制限設定用）"""
+@router.get("/server-ip", summary="このサーバーの外部IPを確認する（認証不要）")
+async def get_server_ip() -> dict:
+    """Railway サーバーの外部IPアドレスを返す（楽天IP制限設定用・認証不要）"""
     import httpx
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get("https://api.ipify.org?format=json")
             ip_data = resp.json()
-            return {"server_ip": ip_data.get("ip"), "note": "この IP を楽天の許可IPリストに追加してください"}
+            return {
+                "server_ip": ip_data.get("ip"),
+                "note": "この IP を楽天の許可IPリストに追加してください",
+            }
     except Exception as e:
         return {"error": str(e)}
 
