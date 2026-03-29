@@ -3,6 +3,8 @@
 ログイン・ユーザー情報取得を提供する。
 """
 
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
@@ -31,7 +33,7 @@ class LoginResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     email: str
     display_name: str
     role: str
