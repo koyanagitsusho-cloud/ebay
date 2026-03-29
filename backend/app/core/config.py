@@ -111,7 +111,7 @@ class Settings(BaseSettings):
 
     # 自動リサーチ設定
     AUTO_RESEARCH_KEYWORDS: str = Field(
-        default="ゲーム機,カメラ,ヘッドホン,腕時計,フィギュア",
+        default="ポケモンカード,ゲーム機,カメラ,ヘッドホン,腕時計,フィギュア,ガンプラ",
         description="自動リサーチ対象キーワード（カンマ区切り）",
     )
     AUTO_RESEARCH_MAX_PURCHASE_PRICE_JPY: int = Field(
@@ -123,7 +123,7 @@ class Settings(BaseSettings):
         description="自動リサーチ: 仕入れ価格下限（円）",
     )
     AUTO_RESEARCH_MIN_SCORE: float = Field(
-        default=50.0,
+        default=30.0,
         description="自動リサーチ: 候補登録の最低スコア閾値",
     )
 

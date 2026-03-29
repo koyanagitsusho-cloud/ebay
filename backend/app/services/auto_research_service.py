@@ -19,14 +19,46 @@ logger = get_logger(__name__)
 
 # 日本語キーワード → 英語検索キーワードのマッピング（eBay検索用）
 KEYWORD_TRANSLATION: dict[str, str] = {
-    "ゲーム機": "game console Nintendo Sony",
-    "カメラ": "camera digital mirrorless Japan",
-    "ヘッドホン": "headphones Sony Audio Japan",
-    "腕時計": "watch Japanese vintage",
-    "フィギュア": "anime figure Japan",
-    "レンズ": "camera lens Japan",
-    "オーディオ": "audio equipment Japan",
+    # ゲーム
+    "ゲーム機": "Nintendo Switch PS5 game console Japan",
+    "ゲームソフト": "Nintendo Switch game software Japan",
+    "ポケモン": "Pokemon cards Japanese sealed",
+    "ポケモンカード": "Pokemon cards Japanese booster box",
+    "遊戯王": "Yu-Gi-Oh cards Japanese",
+    "ニンテンドー": "Nintendo game Japan",
+    "プレステ": "PlayStation Japan",
+    "Switch": "Nintendo Switch Japan",
+    # カメラ・電子機器
+    "カメラ": "digital camera mirrorless Japan Sony Canon",
+    "レンズ": "camera lens Japan Sony Canon Nikon",
+    "一眼レフ": "DSLR camera Japan",
+    "ミラーレス": "mirrorless camera Japan",
+    # オーディオ
+    "ヘッドホン": "headphones Sony Audio Technics Japan",
+    "イヤホン": "earphones in-ear Japan",
+    "スピーカー": "speaker audio Japan",
+    "オーディオ": "audio equipment Japan vintage",
+    # 時計・アクセサリー
+    "腕時計": "Japanese watch vintage Seiko Casio",
+    "時計": "watch Japanese Seiko Orient",
+    "ブランド品": "luxury brand Japan authentic",
+    # フィギュア・コレクション
+    "フィギュア": "anime figure Japan collectible",
+    "プラモデル": "Gundam model kit Japan",
+    "ガンプラ": "Gundam model Japan Bandai",
+    "アニメ": "anime merchandise Japan",
+    # 楽器
+    "楽器": "musical instrument Japan vintage",
+    "ギター": "guitar Japan vintage",
+    # PC・スマホ
     "キーボード": "mechanical keyboard Japan",
+    "スマホ": "smartphone Japan unlocked",
+    "iPad": "iPad Japan Apple",
+    # その他
+    "本": "Japanese book manga",
+    "漫画": "manga Japanese comics",
+    "スポーツ": "sports equipment Japan",
+    "工具": "tools Japan vintage",
 }
 
 
@@ -109,7 +141,9 @@ class AutoResearchService:
             return result
 
         # eBay検索用の英語キーワードを決定
-        ebay_keyword = KEYWORD_TRANSLATION.get(keyword, keyword)
+        # マップにない場合はキーワードをそのまま使用（英語キーワードならそのまま機能する）
+        ebay_keyword = KEYWORD_TRANSLATION.get(keyword, f"{keyword} Japan")
+        logger.info("eBayキーワード", japanese=keyword, english=ebay_keyword)
 
         # Step 2: eBay相場を取得（キーワード単位で1回だけ）
         ebay_summary = await self.ebay_finding.get_price_summary(
@@ -174,15 +208,22 @@ class AutoResearchService:
 
         # eBay相場がない場合は楽天価格から目標価格を推定
         if market_price_usd is None:
-            # 楽天価格（円）→ USD換算 × 利益係数（最低限の利益を確保する倍率）
-            estimated_usd = (purchase_price / settings.DEFAULT_EXCHANGE_RATE_JPY_USD) * 2.0
+            # 楽天価格（円）→ USD換算 × 利益係数
+            # 3倍設定: eBay手数料・送料・利益を確保するのに必要な倍率
+            estimated_usd = (purchase_price / settings.DEFAULT_EXCHANGE_RATE_JPY_USD) * 3.0
             target_price_usd = round(estimated_usd, 2)
         else:
-            # eBay相場の95%を目標価格とする（競争力のある価格設定）
-            target_price_usd = round(market_price_usd * 0.95, 2)
+            # eBay相場の90%を目標価格とする（競争力のある価格設定）
+            target_price_usd = round(market_price_usd * 0.90, 2)
 
-        # 国際送料の推定（重量・サイズ不明のため固定値）
-        estimated_shipping_usd = 15.0
+        # 国際送料の推定
+        # 仕入れ価格が低い商品（カード・小物等）は軽量のため安め、高い商品は重めに設定
+        if purchase_price <= 3000:
+            estimated_shipping_usd = 8.0   # カード・小物など軽量品
+        elif purchase_price <= 10000:
+            estimated_shipping_usd = 15.0  # 中型商品
+        else:
+            estimated_shipping_usd = 25.0  # 大型・重量商品
 
         # 利益計算
         profit_result = self.calculator.calculate(
