@@ -25,8 +25,13 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # 環境変数 DATABASE_URL があれば上書き（alembic.ini の値より優先）
+# Railway は postgresql:// 形式で提供するため asyncpg 用に変換する
 _db_url = os.environ.get("DATABASE_URL")
 if _db_url:
+    if _db_url.startswith("postgresql://"):
+        _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif _db_url.startswith("postgres://"):
+        _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
     config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata

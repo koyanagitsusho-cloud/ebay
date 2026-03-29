@@ -2,8 +2,12 @@
 .env
 .env.local
 .env.production
+.env.staging
 *.key
 *.pem
+
+# Railway
+.railway/
 
 # Python
 __pycache__/

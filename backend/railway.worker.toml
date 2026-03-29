@@ -1,0 +1,14 @@
+# Celery worker サービス用設定
+# Railway上でbackendと同じDockerイメージを使い、コマンドのみ変えて別サービスとして動かす
+# 使い方: Railway UIでbackendと同じリポジトリ/ディレクトリを指定し、
+# Start Commandを以下に上書き設定する:
+#   celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "celery -A app.workers.celery_app worker --loglevel=info --concurrency=2"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

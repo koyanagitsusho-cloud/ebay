@@ -40,10 +40,25 @@ class Settings(BaseSettings):
     # ─────────────────────────────────────
     DATABASE_URL: str = Field(
         default="postgresql+asyncpg://postgres:password@localhost:5432/ebay_automation",
-        description="非同期PostgreSQL接続URL",
+        description="非同期PostgreSQL接続URL。Railway提供の postgresql:// も自動変換する",
     )
     DATABASE_POOL_SIZE: int = 10
     DATABASE_MAX_OVERFLOW: int = 20
+
+    @property
+    def async_database_url(self) -> str:
+        """
+        SQLAlchemy asyncpg用URLを返す。
+        RailwayはDATABASE_URLを `postgresql://` 形式で提供するため、
+        `postgresql+asyncpg://` に自動変換する。
+        """
+        url = self.DATABASE_URL
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgres://"):
+            # Heroku互換形式も対応
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        return url
 
     # ─────────────────────────────────────
     # Redis

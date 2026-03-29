@@ -21,7 +21,7 @@ from app.core.config import settings
 # エンジン作成
 # ─────────────────────────────────────
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.async_database_url,
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,  # DEBUGモードでSQL出力（本番は必ずFalse）

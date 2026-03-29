@@ -171,6 +171,88 @@ npm run dev
 
 ---
 
+## Railway へのデプロイ
+
+### 前提条件
+- GitHubリポジトリにコードをpush済み
+- [Railway](https://railway.app/) アカウント作成済み
+- Railway CLI インストール済み（オプション）: `npm install -g @railway/cli`
+
+### Railway プロジェクト構成
+
+Railwayプロジェクト内に以下のサービスを作成します：
+
+| サービス名 | 種別 | 設定 |
+|-----------|------|------|
+| `postgres` | PostgreSQLプラグイン | Railwayが自動プロビジョニング |
+| `redis` | Redisプラグイン | Railwayが自動プロビジョニング |
+| `backend` | Dockerfileビルド | `backend/` ディレクトリ |
+| `frontend` | Dockerfileビルド | `frontend/` ディレクトリ |
+| `celery-worker` | Dockerfileビルド | `backend/` ディレクトリ（コマンド上書き） |
+
+### デプロイ手順
+
+**1. Railway プロジェクト作成**
+```
+Railway UI → New Project → Deploy from GitHub repo → リポジトリを選択
+```
+
+**2. PostgreSQL・Redis プラグイン追加**
+```
+Railway UI → プロジェクト画面 → New Service → Database → PostgreSQL（およびRedis）
+```
+
+**3. backend サービスの設定**
+- Source: GitHubリポジトリ の `backend/` ディレクトリ（Root Directoryで指定）
+- Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+- 環境変数: `docs/railway-env-vars.md` 参照
+
+**4. frontend サービスの設定**
+- Source: GitHubリポジトリ の `frontend/` ディレクトリ（Root Directoryで指定）
+- 環境変数:
+  ```
+  NEXT_PUBLIC_API_URL=https://<backend-service>.up.railway.app/api/v1
+  NEXT_PUBLIC_APP_URL=https://<frontend-service>.up.railway.app
+  ```
+
+**5. celery-worker サービスの設定**
+- Source: `backend/` と同じ（別サービスとして追加）
+- Start Command を上書き: `celery -A app.workers.celery_app worker --loglevel=info --concurrency=2`
+- 環境変数: backend と同じ変数を設定
+
+**6. 初回 DB マイグレーション**
+```bash
+# Railway CLI を使用
+railway login
+railway link
+railway run --service backend alembic upgrade head
+```
+
+または Railway UI の「Run Command」機能から:
+```
+alembic upgrade head
+```
+
+**7. 管理者ユーザー作成**
+```bash
+railway run --service backend python create_admin.py
+```
+
+### Railway デプロイ後の確認URL
+
+| 確認項目 | URL |
+|---------|-----|
+| フロントエンド | `https://<frontend>.up.railway.app` |
+| バックエンド API | `https://<backend>.up.railway.app/health` |
+| Swagger UI | `https://<backend>.up.railway.app/docs` |
+
+### GitHub連携による自動デプロイ
+
+GitHub リポジトリの `main` ブランチへの push で Railway が自動デプロイします。
+`feature/*` ブランチでのデプロイは Railway UI で個別に設定可能。
+
+---
+
 ## DBマイグレーション
 
 ```bash
