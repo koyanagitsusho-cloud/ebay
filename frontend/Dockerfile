@@ -7,8 +7,10 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-# next.config.js の output: "standalone" により
-# .next/standalone/ に自己完結型サーバーが生成される
+# standalone モードに必要な静的ファイルをコピー
+RUN cp -r .next/static .next/standalone/.next/static
+RUN if [ -d public ]; then cp -r public .next/standalone/public; fi
+
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
