@@ -105,6 +105,29 @@ class Settings(BaseSettings):
         return "https://api.sandbox.ebay.com/identity/v1/oauth2/token"
 
     # ─────────────────────────────────────
+    # 楽天API設定
+    # ─────────────────────────────────────
+    RAKUTEN_APP_ID: str = Field(default="", description="楽天デベロッパー アプリID")
+
+    # 自動リサーチ設定
+    AUTO_RESEARCH_KEYWORDS: str = Field(
+        default="ゲーム機,カメラ,ヘッドホン,腕時計,フィギュア",
+        description="自動リサーチ対象キーワード（カンマ区切り）",
+    )
+    AUTO_RESEARCH_MAX_PURCHASE_PRICE_JPY: int = Field(
+        default=30000,
+        description="自動リサーチ: 仕入れ価格上限（円）",
+    )
+    AUTO_RESEARCH_MIN_PURCHASE_PRICE_JPY: int = Field(
+        default=500,
+        description="自動リサーチ: 仕入れ価格下限（円）",
+    )
+    AUTO_RESEARCH_MIN_SCORE: float = Field(
+        default=50.0,
+        description="自動リサーチ: 候補登録の最低スコア閾値",
+    )
+
+    # ─────────────────────────────────────
     # AI（Anthropic Claude）設定
     # ─────────────────────────────────────
     ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic Claude API キー")
