@@ -17,7 +17,7 @@ from app.services.scoring_service import ScoringInput, ScoringService
 
 logger = get_logger(__name__)
 
-# 日本語キーワード → 英語検索キーワードのマッピング（eBay検索用）
+# 日本語キーワード → eBay英語検索キーワードのマッピング
 KEYWORD_TRANSLATION: dict[str, str] = {
     # ゲーム
     "ゲーム機": "Nintendo Switch PS5 game console Japan",
@@ -76,15 +76,7 @@ class AutoResearchResult:
 
 
 class AutoResearchService:
-    """
-    楽天市場 × eBay相場で自動リサーチを行うサービス。
-
-    処理フロー:
-    1. 楽天市場でキーワード検索（仕入れ候補の取得）
-    2. 同商品をeBayで検索して相場価格を確認
-    3. 利益計算・スコアリング
-    4. 最低スコア以上の商品をリサーチ候補として登録
-    """
+    """楽天市場 × eBay相場で自動リサーチを行うサービス。"""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -102,15 +94,7 @@ class AutoResearchService:
         max_price_jpy: int | None = None,
         min_score: float | None = None,
     ) -> AutoResearchResult:
-        """
-        1キーワードに対して自動リサーチを実行する。
-
-        Args:
-            keyword: 楽天検索キーワード
-            min_price_jpy: 仕入れ価格下限（円）
-            max_price_jpy: 仕入れ価格上限（円）
-            min_score: 候補登録の最低スコア
-        """
+        """1キーワードに対して自動リサーチを実行する。"""
         min_price = min_price_jpy or settings.AUTO_RESEARCH_MIN_PURCHASE_PRICE_JPY
         max_price = max_price_jpy or settings.AUTO_RESEARCH_MAX_PURCHASE_PRICE_JPY
         min_score_threshold = min_score or settings.AUTO_RESEARCH_MIN_SCORE
@@ -126,6 +110,14 @@ class AutoResearchService:
             errors=0,
         )
 
+        logger.info(
+            "=== 自動リサーチ開始 ===",
+            keyword=keyword,
+            min_price_jpy=min_price,
+            max_price_jpy=max_price,
+            min_score=min_score_threshold,
+        )
+
         # Step 1: 楽天市場で商品検索
         rakuten_items = await self.rakuten.search_items(
             keyword=keyword,
@@ -136,62 +128,80 @@ class AutoResearchService:
         )
         result.rakuten_found = len(rakuten_items)
 
+        logger.info(
+            "Step1 楽天検索完了",
+            keyword=keyword,
+            rakuten_found=result.rakuten_found,
+        )
+
         if not rakuten_items:
-            logger.info("楽天で商品が見つかりませんでした", keyword=keyword)
+            logger.warning("楽天検索結果が0件です。検索キーワードや価格範囲を確認してください。", keyword=keyword)
             return result
 
-        # eBay検索用の英語キーワードを決定
-        # マップにない場合はキーワードをそのまま使用（英語キーワードならそのまま機能する）
+        # Step 2: eBay相場を取得
         ebay_keyword = KEYWORD_TRANSLATION.get(keyword, f"{keyword} Japan")
-        logger.info("eBayキーワード", japanese=keyword, english=ebay_keyword)
+        logger.info("Step2 eBay相場検索", keyword=keyword, ebay_keyword=ebay_keyword)
 
-        # Step 2: eBay相場を取得（キーワード単位で1回だけ）
         ebay_summary = await self.ebay_finding.get_price_summary(
             keyword=ebay_keyword,
             max_results=30,
         )
 
-        if ebay_summary:
+        if ebay_summary and ebay_summary.sold_count > 0:
             result.ebay_price_found = ebay_summary.sold_count
-            # 相場価格として中央値を使用（平均より外れ値の影響を受けにくい）
             market_price_usd = ebay_summary.median_price_usd
             logger.info(
-                "eBay相場取得",
-                keyword=ebay_keyword,
+                "Step2 eBay相場取得成功",
+                ebay_keyword=ebay_keyword,
                 median_usd=market_price_usd,
                 sold_count=ebay_summary.sold_count,
+                avg_usd=ebay_summary.avg_price_usd,
             )
         else:
-            # eBayデータなし → 楽天価格から推定（円 ÷ レート × 1.5 で粗利確保）
             logger.warning(
-                "eBay相場データなし。楽天価格から推定します",
-                keyword=keyword,
+                "Step2 eBay相場データなし。楽天価格から価格を推定します。",
+                ebay_keyword=ebay_keyword,
             )
             market_price_usd = None
 
+        # 重複チェック用に既存タイトルをまとめて取得（1回だけ）
+        existing_items = await self.repo.list_by_status(limit=2000)
+        existing_titles = {item.title for item in existing_items}
+        logger.info("既存候補件数", count=len(existing_titles))
+
         # Step 3: 各楽天商品に対して利益計算 → 候補登録
-        for item in rakuten_items:
+        logger.info("Step3 利益計算・登録開始", items_count=len(rakuten_items))
+
+        for i, item in enumerate(rakuten_items):
             try:
                 await self._process_item(
                     item=item,
                     market_price_usd=market_price_usd,
                     min_score_threshold=min_score_threshold,
                     result=result,
+                    existing_titles=existing_titles,
+                    index=i + 1,
+                    total=len(rakuten_items),
                 )
             except Exception as e:
                 logger.error(
                     "商品処理エラー",
+                    index=i + 1,
                     item_title=item.title[:50],
                     error=str(e),
                 )
                 result.errors += 1
 
         logger.info(
-            "自動リサーチ完了",
+            "=== 自動リサーチ完了 ===",
             keyword=keyword,
             rakuten_found=result.rakuten_found,
+            ebay_price_found=result.ebay_price_found,
+            profit_calculated=result.profit_calculated,
             candidates_created=result.candidates_created,
             skipped_low_profit=result.skipped_low_profit,
+            skipped_duplicate=result.skipped_duplicate,
+            errors=result.errors,
         )
         return result
 
@@ -201,29 +211,33 @@ class AutoResearchService:
         market_price_usd: float | None,
         min_score_threshold: float,
         result: AutoResearchResult,
+        existing_titles: set,
+        index: int,
+        total: int,
     ) -> None:
         """1商品を処理して候補登録するかどうかを判定する"""
 
         purchase_price = item.price_jpy
 
-        # eBay相場がない場合は楽天価格から目標価格を推定
-        if market_price_usd is None:
-            # 楽天価格（円）→ USD換算 × 利益係数
-            # 3倍設定: eBay手数料・送料・利益を確保するのに必要な倍率
-            estimated_usd = (purchase_price / settings.DEFAULT_EXCHANGE_RATE_JPY_USD) * 3.0
-            target_price_usd = round(estimated_usd, 2)
-        else:
-            # eBay相場の90%を目標価格とする（競争力のある価格設定）
-            target_price_usd = round(market_price_usd * 0.90, 2)
-
-        # 国際送料の推定
-        # 仕入れ価格が低い商品（カード・小物等）は軽量のため安め、高い商品は重めに設定
+        # 国際送料の推定（仕入れ価格帯で分類）
         if purchase_price <= 3000:
-            estimated_shipping_usd = 8.0   # カード・小物など軽量品
+            estimated_shipping_usd = 8.0
         elif purchase_price <= 10000:
-            estimated_shipping_usd = 15.0  # 中型商品
+            estimated_shipping_usd = 15.0
         else:
-            estimated_shipping_usd = 25.0  # 大型・重量商品
+            estimated_shipping_usd = 25.0
+
+        # eBay目標価格の決定
+        if market_price_usd is None:
+            # eBay相場なし: 楽天価格から推定（円→USD×3倍）
+            target_price_usd = round(
+                (purchase_price / settings.DEFAULT_EXCHANGE_RATE_JPY_USD) * 3.0, 2
+            )
+            price_source = "推定（楽天価格×3）"
+        else:
+            # eBay相場あり: 相場の90%
+            target_price_usd = round(market_price_usd * 0.90, 2)
+            price_source = f"eBay相場({market_price_usd:.2f})の90%"
 
         # 利益計算
         profit_result = self.calculator.calculate(
@@ -235,11 +249,30 @@ class AutoResearchService:
         )
         result.profit_calculated += 1
 
+        logger.info(
+            f"[{index}/{total}] 利益計算",
+            title=item.title[:40],
+            purchase_jpy=purchase_price,
+            target_usd=target_price_usd,
+            price_source=price_source,
+            profit_jpy=profit_result.gross_profit_jpy,
+            profit_rate=f"{profit_result.gross_profit_rate:.1%}",
+            is_profitable=profit_result.is_profitable,
+        )
+
         # 利益率・利益額チェック
         if (
             profit_result.gross_profit_rate < settings.DEFAULT_PROFIT_RATE_MIN
             or profit_result.gross_profit_jpy < settings.DEFAULT_PROFIT_AMOUNT_MIN
         ):
+            logger.info(
+                f"[{index}/{total}] 利益不足でスキップ",
+                title=item.title[:40],
+                profit_rate=f"{profit_result.gross_profit_rate:.1%}",
+                profit_jpy=profit_result.gross_profit_jpy,
+                min_rate=f"{settings.DEFAULT_PROFIT_RATE_MIN:.1%}",
+                min_jpy=settings.DEFAULT_PROFIT_AMOUNT_MIN,
+            )
             result.skipped_low_profit += 1
             return
 
@@ -252,17 +285,22 @@ class AutoResearchService:
         score_result = self.scoring.score(score_input)
 
         if score_result.total_score < min_score_threshold:
+            logger.info(
+                f"[{index}/{total}] スコア不足でスキップ",
+                title=item.title[:40],
+                score=score_result.total_score,
+                min_score=min_score_threshold,
+            )
             result.skipped_low_profit += 1
             return
 
-        # 重複チェック（同じタイトルの候補が既にあればスキップ）
-        existing = await self.repo.list_by_status(limit=1000)
-        for existing_item in existing:
-            if existing_item.title == item.title:
-                result.skipped_duplicate += 1
-                return
+        # 重複チェック
+        if item.title in existing_titles:
+            logger.info(f"[{index}/{total}] 重複スキップ", title=item.title[:40])
+            result.skipped_duplicate += 1
+            return
 
-        # リサーチ候補として登録
+        # DB登録
         candidate = await self.repo.create(
             title=item.title,
             brand=None,
@@ -284,7 +322,6 @@ class AutoResearchService:
             status="new",
         )
 
-        # スコアを保存
         await self.score_repo.create(
             candidate_id=candidate.id,
             profit_score=score_result.profit_score,
@@ -302,10 +339,13 @@ class AutoResearchService:
         )
         await self.repo.update(candidate, total_score=score_result.total_score, status="scored")
 
+        # 登録済みタイトルに追加（同一実行内での重複防止）
+        existing_titles.add(item.title)
         result.candidates_created += 1
+
         logger.info(
-            "候補を自動登録",
-            title=item.title[:50],
+            f"[{index}/{total}] ★ 候補登録完了",
+            title=item.title[:40],
             purchase_jpy=purchase_price,
             target_usd=target_price_usd,
             profit_rate=f"{profit_result.gross_profit_rate:.1%}",
@@ -316,16 +356,13 @@ class AutoResearchService:
         self,
         keywords: list[str] | None = None,
     ) -> list[AutoResearchResult]:
-        """
-        設定された全キーワードに対して自動リサーチを実行する。
-
-        Args:
-            keywords: キーワードリスト。Noneの場合は設定値を使用
-        """
+        """全キーワードに対して自動リサーチを実行する。"""
         if keywords is None:
             keywords = [k.strip() for k in settings.AUTO_RESEARCH_KEYWORDS.split(",") if k.strip()]
 
+        logger.info("全キーワードリサーチ開始", keywords=keywords, count=len(keywords))
         results = []
+
         for keyword in keywords:
             try:
                 result = await self.run_for_keyword(keyword)
@@ -335,8 +372,8 @@ class AutoResearchService:
 
         total_created = sum(r.candidates_created for r in results)
         logger.info(
-            "全キーワード自動リサーチ完了",
-            keywords=keywords,
+            "全キーワードリサーチ完了",
+            keywords_count=len(keywords),
             total_candidates_created=total_created,
         )
         return results

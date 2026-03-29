@@ -29,6 +29,8 @@ export default function SettingsPage() {
   const [autoSettings, setAutoSettings] = useState<AutoResearchSettings | null>(null);
   const [keywords, setKeywords] = useState("");
   const [running, setRunning] = useState(false);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnoseResult, setDiagnoseResult] = useState<Record<string, unknown> | null>(null);
   const [runResult, setRunResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +52,23 @@ export default function SettingsPage() {
       }
     } catch {
       // 設定取得失敗は無視
+    }
+  }
+
+  async function handleDiagnose() {
+    setDiagnosing(true);
+    setDiagnoseResult(null);
+    try {
+      const token = localStorage.getItem("access_token");
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auto-research/diagnose`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      setDiagnoseResult(data);
+    } catch (e) {
+      setDiagnoseResult({ error: String(e) });
+    } finally {
+      setDiagnosing(false);
     }
   }
 
@@ -139,13 +158,30 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <button
-          onClick={handleRunAutoResearch}
-          disabled={running || !autoSettings?.rakuten_configured}
-          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded text-sm font-medium"
-        >
-          {running ? "⏳ リサーチ実行中..." : "▶ 今すぐリサーチ実行"}
-        </button>
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={handleDiagnose}
+            disabled={diagnosing}
+            className="bg-gray-600 hover:bg-gray-700 disabled:opacity-50 text-white px-4 py-2 rounded text-sm font-medium"
+          >
+            {diagnosing ? "診断中..." : "🔧 API接続診断"}
+          </button>
+          <button
+            onClick={handleRunAutoResearch}
+            disabled={running || !autoSettings?.rakuten_configured}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2 rounded text-sm font-medium"
+          >
+            {running ? "⏳ リサーチ実行中..." : "▶ 今すぐリサーチ実行"}
+          </button>
+        </div>
+
+        {/* 診断結果 */}
+        {diagnoseResult && (
+          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded text-xs font-mono overflow-auto">
+            <p className="font-bold text-gray-700 mb-1">API診断結果:</p>
+            <pre>{JSON.stringify(diagnoseResult, null, 2)}</pre>
+          </div>
+        )}
         {!autoSettings?.rakuten_configured && (
           <p className="text-xs text-red-500 mt-2">
             楽天APIキーが設定されていません。Railway Variables に RAKUTEN_APP_ID を追加してください。

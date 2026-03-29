@@ -37,6 +37,39 @@ class AutoResearchSettingsResponse(BaseModel):
     ebay_configured: bool
 
 
+@router.get("/diagnose", summary="API接続診断（楽天・eBayの疎通確認）")
+async def diagnose(
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """
+    楽天APIとeBay APIの実際の疎通をテストする。
+    設定済み表示でも実際に動いているかここで確認できる。
+    """
+    from app.clients.ebay.finding_client import EbayFindingClient
+    from app.clients.rakuten.client import RakutenClient
+
+    rakuten = RakutenClient()
+    ebay = EbayFindingClient()
+
+    # 楽天API テスト
+    rakuten_result = await rakuten.test_connection()
+
+    # eBay API テスト（簡易）
+    ebay_items = await ebay.find_completed_items("Pokemon cards Japan", max_results=3)
+    ebay_result = {
+        "ok": len(ebay_items) > 0,
+        "items_found": len(ebay_items),
+        "sample_price": ebay_items[0].sold_price_usd if ebay_items else None,
+    }
+
+    return {
+        "rakuten": rakuten_result,
+        "ebay": ebay_result,
+        "rakuten_app_id_set": bool(settings.RAKUTEN_APP_ID),
+        "ebay_client_id_set": bool(settings.EBAY_CLIENT_ID),
+    }
+
+
 @router.get("/settings", response_model=AutoResearchSettingsResponse)
 async def get_auto_research_settings(
     current_user: User = Depends(get_current_user),
