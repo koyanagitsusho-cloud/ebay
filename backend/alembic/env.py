@@ -1,6 +1,13 @@
-"""Alembicマイグレーション設定"""
+"""
+Alembicマイグレーション設定
+
+DATABASE_URL 環境変数があれば優先使用する。
+これにより Docker Compose / ローカル / Railway など
+どの環境でも正しい接続先を使える。
+"""
 
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -8,7 +15,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-# models の全インポート（autogenerate用）
+# models の全インポート（autogenerate 用）
 from app.core.database import Base
 from app.models import *  # noqa: F401, F403
 
@@ -16,6 +23,11 @@ config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# 環境変数 DATABASE_URL があれば上書き（alembic.ini の値より優先）
+_db_url = os.environ.get("DATABASE_URL")
+if _db_url:
+    config.set_main_option("sqlalchemy.url", _db_url)
 
 target_metadata = Base.metadata
 

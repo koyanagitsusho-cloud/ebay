@@ -1,6 +1,10 @@
 """
 FastAPI依存性注入
 認証・DBセッション・権限チェックを一元管理する。
+
+修正履歴:
+- HTTPBearerのauto_error=Falseを使い、認証なしアクセスは403ではなく401を返すように変更
+  （デフォルトのHTTPBearerはAuthorizationヘッダー不在で403を返す）
 """
 
 from collections.abc import AsyncGenerator
@@ -15,17 +19,28 @@ from app.core.exceptions import AuthenticationError, PermissionDeniedError
 from app.core.security import decode_access_token, require_role
 from app.models.user import User
 
-security = HTTPBearer()
+# auto_error=False にすることで、ヘッダー不在時に自動で403を返さず
+# get_current_user 内で明示的に401を返せるようにする
+security = HTTPBearer(auto_error=False)
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """
     JWTトークンからログインユーザーを取得する依存性。
-    無効トークン・存在しないユーザーはHTTP401を返す。
+    - Authorizationヘッダーなし → HTTP 401（ログインを促す）
+    - 無効トークン → HTTP 401
+    - 存在しないユーザー → HTTP 401
     """
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="ログインが必要です",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = decode_access_token(credentials.credentials)
         user_id = payload.get("sub")
@@ -36,13 +51,16 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from e
 
-    result = await db.execute(select(User).where(User.id == user_id, User.is_active == True))  # noqa: E712
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.is_active == True)  # noqa: E712
+    )
     user = result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="ユーザーが見つかりません",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     return user

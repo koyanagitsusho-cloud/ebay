@@ -66,7 +66,7 @@ class AuditService:
             before_state=before_state,
             after_state=after_state,
             diff=diff,
-            metadata=metadata,
+            meta_info=metadata,   # モデルのカラム名は meta_info（metadata は SQLAlchemy の予約語）
             result=result,
             error_message=error_message,
         )

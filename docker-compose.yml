@@ -1,8 +1,13 @@
 version: "3.9"
 
 # ─────────────────────────────────────────────────────────────────
-# eBay自動化ツール Docker Compose設定
-# 開発環境用。本番では別途設定すること。
+# eBay自動化ツール Docker Compose設定（開発環境）
+#
+# 起動手順:
+#   cp .env.example .env      # .envを編集してAPIキーを設定
+#   docker-compose up -d
+#   docker-compose exec backend alembic upgrade head
+#   docker-compose exec backend python create_admin.py
 # ─────────────────────────────────────────────────────────────────
 
 services:
@@ -45,9 +50,13 @@ services:
     ports:
       - "8000:8000"
     environment:
+      # DB・Redis 接続はサービス名（Docker内部DNS）を使う
       - DATABASE_URL=postgresql+asyncpg://postgres:password@postgres:5432/ebay_automation
       - REDIS_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      # フロントエンドのオリジン（ブラウザからのCORS許可）
+      # localhost:3000 = ユーザーブラウザからのアクセス
+      - CORS_ORIGINS=["http://localhost:3000","http://127.0.0.1:3000"]
     env_file:
       - .env
     depends_on:
@@ -91,6 +100,8 @@ services:
     ports:
       - "3000:3000"
     environment:
+      # ブラウザ（ホスト側）から backend にアクセスするため localhost を使う
+      # （コンテナ内からではなくブラウザのJSが送信するため）
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
     depends_on:
       - backend

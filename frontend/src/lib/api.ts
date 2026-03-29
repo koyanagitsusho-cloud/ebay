@@ -7,9 +7,21 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 /** JWTトークンをローカルストレージから取得する */
-function getToken(): string | null {
+export function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("access_token");
+}
+
+/** JWTトークンを保存する */
+export function setToken(token: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem("access_token", token);
+}
+
+/** JWTトークンを削除する（ログアウト） */
+export function clearToken(): void {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem("access_token");
 }
 
 /** APIリクエスト共通処理 */
@@ -33,13 +45,22 @@ async function request<T>(
     headers,
   });
 
-  if (res.status === 401) {
-    // トークン期限切れ → ログインページへ
+  // 401 または 403（未認証）→ ログインページへリダイレクト
+  // HTTPBearer は Authorizationヘッダーなし = 403、無効トークン = 401 を返す
+  if (res.status === 401 || res.status === 403) {
+    clearToken();
     if (typeof window !== "undefined") {
-      localStorage.removeItem("access_token");
-      window.location.href = "/login";
+      // 現在のパスをリダイレクト後に戻れるよう保存
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/login") {
+        window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+      }
     }
-    throw new Error("認証が必要です");
+    throw new ApiError(
+      "ログインが必要です",
+      res.status,
+      "AUTH_REQUIRED"
+    );
   }
 
   if (!res.ok) {
@@ -75,14 +96,20 @@ export class ApiError extends Error {
 // ─────────────────────────────────────
 export const authApi = {
   login: (email: string, password: string) =>
-    request<{ access_token: string; role: string; email: string; display_name: string; user_id: string }>(
-      "/auth/login",
-      {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      }
+    request<{
+      access_token: string;
+      role: string;
+      email: string;
+      display_name: string;
+      user_id: string;
+    }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  me: () =>
+    request<{ id: string; email: string; role: string; display_name: string }>(
+      "/auth/me"
     ),
-  me: () => request<{ id: string; email: string; role: string; display_name: string }>("/auth/me"),
 };
 
 // ─────────────────────────────────────
@@ -121,21 +148,44 @@ export interface CreateResearchCandidateInput {
 }
 
 export const researchApi = {
-  list: (params?: { status?: string; order_by_score?: boolean; limit?: number; offset?: number }) => {
+  list: (params?: {
+    status?: string;
+    order_by_score?: boolean;
+    limit?: number;
+    offset?: number;
+  }) => {
     const query = new URLSearchParams();
     if (params?.status) query.set("status", params.status);
-    if (params?.order_by_score !== undefined) query.set("order_by_score", String(params.order_by_score));
+    if (params?.order_by_score !== undefined)
+      query.set("order_by_score", String(params.order_by_score));
     if (params?.limit) query.set("limit", String(params.limit));
     if (params?.offset) query.set("offset", String(params.offset));
     return request<ResearchCandidate[]>(`/research/?${query}`);
   },
   get: (id: string) => request<ResearchCandidate>(`/research/${id}`),
   create: (data: CreateResearchCandidateInput) =>
-    request<ResearchCandidate>("/research/", { method: "POST", body: JSON.stringify(data) }),
-  update: (id: string, data: Partial<CreateResearchCandidateInput & { status: string; score_override: number; score_override_reason: string }>) =>
-    request<ResearchCandidate>(`/research/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    request<ResearchCandidate>("/research/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  update: (
+    id: string,
+    data: Partial<
+      CreateResearchCandidateInput & {
+        status: string;
+        score_override: number;
+        score_override_reason: string;
+      }
+    >
+  ) =>
+    request<ResearchCandidate>(`/research/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   calculateProfit: (id: string, targetPriceUsd: number) =>
-    request<Record<string, unknown>>(`/research/${id}/calculate-profit?target_price_usd=${targetPriceUsd}`),
+    request<Record<string, unknown>>(
+      `/research/${id}/calculate-profit?target_price_usd=${targetPriceUsd}`
+    ),
   runScoring: (id: string) =>
     request<ResearchCandidate>(`/research/${id}/score`, { method: "POST" }),
   overrideScore: (id: string, score: number, reason: string) =>
@@ -176,17 +226,27 @@ export interface ListingDraft {
 
 export const listingsApi = {
   listDrafts: (status?: string) =>
-    request<ListingDraft[]>(`/listings/drafts${status ? `?status=${status}` : ""}`),
+    request<ListingDraft[]>(
+      `/listings/drafts${status ? `?status=${status}` : ""}`
+    ),
   getDraft: (id: string) => request<ListingDraft>(`/listings/drafts/${id}`),
-  listPendingApproval: () => request<ListingDraft[]>("/listings/drafts/pending-approval"),
+  listPendingApproval: () =>
+    request<ListingDraft[]>("/listings/drafts/pending-approval"),
   updateDraft: (id: string, data: Partial<ListingDraft>) =>
-    request<ListingDraft>(`/listings/drafts/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+    request<ListingDraft>(`/listings/drafts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   submitForReview: (id: string, note?: string) =>
     request<ListingDraft>(`/listings/drafts/${id}/submit-for-review`, {
       method: "POST",
       body: JSON.stringify({ note }),
     }),
-  reviewApproval: (approvalId: string, action: "approve" | "reject", note?: string) =>
+  reviewApproval: (
+    approvalId: string,
+    action: "approve" | "reject",
+    note?: string
+  ) =>
     request(`/listings/approvals/${approvalId}/review`, {
       method: "POST",
       body: JSON.stringify({ action, note }),
@@ -206,7 +266,10 @@ export const listingsApi = {
       condition_description: string;
       warnings: string[];
       is_valid: boolean;
-    }>("/listings/generate", { method: "POST", body: JSON.stringify(data) }),
+    }>("/listings/generate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ─────────────────────────────────────

@@ -2,23 +2,19 @@
 管理者ユーザー作成スクリプト
 初回セットアップ時に1回だけ実行する。
 
-使用方法:
+使用方法（ローカル）:
   cd backend
-  python ../scripts/create_admin.py
+  python create_admin.py
 
-または:
-  docker-compose exec backend python scripts/create_admin.py
+使用方法（Docker Compose）:
+  docker-compose exec backend python create_admin.py
 """
 
 import asyncio
 import sys
-import os
-
-# backend ディレクトリを Python パスに追加
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
 
-async def main():
+async def main() -> None:
     from app.core.database import AsyncSessionLocal, create_tables
     from app.core.security import hash_password
     from app.models.user import User
@@ -36,13 +32,12 @@ async def main():
         print("エラー: パスワードは8文字以上にしてください")
         sys.exit(1)
 
-    display_name = input("表示名: ").strip() or "Admin"
+    display_name = input("表示名 [Admin]: ").strip() or "Admin"
 
-    # テーブルが存在しない場合は作成
+    # テーブルが存在しない場合は作成（開発環境フォールバック）
     await create_tables()
 
     async with AsyncSessionLocal() as db:
-        # 既存確認
         result = await db.execute(select(User).where(User.email == email))
         existing = result.scalar_one_or_none()
         if existing:
@@ -58,10 +53,11 @@ async def main():
         )
         db.add(user)
         await db.commit()
-        print(f"\n管理者ユーザーを作成しました")
+        print("\n管理者ユーザーを作成しました")
         print(f"  メール: {email}")
         print(f"  ロール: admin")
         print(f"  表示名: {display_name}")
+        print("\nこのユーザーで http://localhost:3000/login にログインできます。")
 
 
 if __name__ == "__main__":

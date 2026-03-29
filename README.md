@@ -127,7 +127,7 @@ docker-compose up -d
 docker-compose exec backend alembic upgrade head
 
 # 管理者ユーザーの初期作成（スクリプト）
-docker-compose exec backend python scripts/create_admin.py
+docker-compose exec backend python create_admin.py
 ```
 
 アクセス先：
