@@ -39,13 +39,14 @@ class AutoResearchSettingsResponse(BaseModel):
 
 @router.get("/debug-rakuten", summary="楽天APIキーの詳細診断（認証不要）")
 async def debug_rakuten() -> dict:
-    """楽天APIキーの実際の値・リクエスト内容を診断する"""
+    """楽天APIキーの実際の値・リクエスト内容を診断する（新エンドポイント対応）"""
     import httpx
     app_id = settings.RAKUTEN_APP_ID
-    # 実際にAPIコール（生レスポンスを返す）
+    access_key = settings.RAKUTEN_ACCESS_KEY
     try:
         params = {
             "applicationId": app_id,
+            "accessKey": access_key,
             "keyword": "テスト",
             "hits": 1,
             "format": "json",
@@ -53,15 +54,14 @@ async def debug_rakuten() -> dict:
         }
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(
-                "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706",
+                "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601",
                 params=params,
             )
         return {
             "app_id_length": len(app_id),
             "app_id_first10": app_id[:10],
-            "app_id_last5": app_id[-5:],
-            "app_id_has_space": " " in app_id,
-            "app_id_has_newline": "\n" in app_id or "\r" in app_id,
+            "access_key_set": bool(access_key),
+            "access_key_length": len(access_key),
             "http_status": resp.status_code,
             "response": resp.json(),
             "request_url": str(resp.url),
@@ -130,7 +130,7 @@ async def get_auto_research_settings(
         min_purchase_price_jpy=settings.AUTO_RESEARCH_MIN_PURCHASE_PRICE_JPY,
         max_purchase_price_jpy=settings.AUTO_RESEARCH_MAX_PURCHASE_PRICE_JPY,
         min_score=settings.AUTO_RESEARCH_MIN_SCORE,
-        rakuten_configured=bool(settings.RAKUTEN_APP_ID),
+        rakuten_configured=bool(settings.RAKUTEN_APP_ID and settings.RAKUTEN_ACCESS_KEY),
         ebay_configured=bool(settings.EBAY_CLIENT_ID),
     )
 

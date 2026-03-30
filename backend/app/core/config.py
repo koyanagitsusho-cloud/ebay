@@ -107,7 +107,8 @@ class Settings(BaseSettings):
     # ─────────────────────────────────────
     # 楽天API設定
     # ─────────────────────────────────────
-    RAKUTEN_APP_ID: str = Field(default="", description="楽天デベロッパー アプリID")
+    RAKUTEN_APP_ID: str = Field(default="", description="楽天デベロッパー アプリID（UUID）")
+    RAKUTEN_ACCESS_KEY: str = Field(default="", description="楽天デベロッパー アクセスキー（pk_...）")
 
     # 自動リサーチ設定
     AUTO_RESEARCH_KEYWORDS: str = Field(

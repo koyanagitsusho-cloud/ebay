@@ -13,7 +13,8 @@ from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-RAKUTEN_SEARCH_URL = "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706"
+# 新エンドポイント（2026年移行済み）
+RAKUTEN_SEARCH_URL = "https://openapi.rakuten.co.jp/ichibams/api/IchibaItem/Search/20220601"
 
 
 @dataclass
@@ -32,8 +33,9 @@ class RakutenItem:
 class RakutenClient:
     """楽天市場APIクライアント"""
 
-    def __init__(self, app_id: str | None = None):
+    def __init__(self, app_id: str | None = None, access_key: str | None = None):
         self.app_id = app_id or settings.RAKUTEN_APP_ID
+        self.access_key = access_key or settings.RAKUTEN_ACCESS_KEY
 
     async def search_items(
         self,
@@ -48,9 +50,13 @@ class RakutenClient:
         if not self.app_id:
             logger.error("RAKUTEN_APP_ID が未設定です。Railway Variables を確認してください。")
             return []
+        if not self.access_key:
+            logger.error("RAKUTEN_ACCESS_KEY が未設定です。Railway Variables を確認してください。")
+            return []
 
         params: dict = {
             "applicationId": self.app_id,
+            "accessKey": self.access_key,
             "keyword": keyword,
             "hits": min(hits, 30),
             "page": page,
@@ -192,6 +198,8 @@ class RakutenClient:
         """
         if not self.app_id:
             return {"ok": False, "error": "RAKUTEN_APP_ID が未設定"}
+        if not self.access_key:
+            return {"ok": False, "error": "RAKUTEN_ACCESS_KEY が未設定"}
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
@@ -199,6 +207,7 @@ class RakutenClient:
                     RAKUTEN_SEARCH_URL,
                     params={
                         "applicationId": self.app_id,
+                        "accessKey": self.access_key,
                         "keyword": "テスト",
                         "hits": 1,
                         "format": "json",
