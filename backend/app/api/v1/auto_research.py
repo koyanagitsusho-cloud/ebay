@@ -37,6 +37,39 @@ class AutoResearchSettingsResponse(BaseModel):
     ebay_configured: bool
 
 
+@router.get("/debug-rakuten", summary="楽天APIキーの詳細診断（認証不要）")
+async def debug_rakuten() -> dict:
+    """楽天APIキーの実際の値・リクエスト内容を診断する"""
+    import httpx
+    app_id = settings.RAKUTEN_APP_ID
+    # 実際にAPIコール（生レスポンスを返す）
+    try:
+        params = {
+            "applicationId": app_id,
+            "keyword": "テスト",
+            "hits": 1,
+            "format": "json",
+            "formatVersion": "2",
+        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(
+                "https://app.rakuten.co.jp/services/api/IchibaItem/Search/20170706",
+                params=params,
+            )
+        return {
+            "app_id_length": len(app_id),
+            "app_id_first10": app_id[:10],
+            "app_id_last5": app_id[-5:],
+            "app_id_has_space": " " in app_id,
+            "app_id_has_newline": "\n" in app_id or "\r" in app_id,
+            "http_status": resp.status_code,
+            "response": resp.json(),
+            "request_url": str(resp.url),
+        }
+    except Exception as e:
+        return {"error": str(e), "app_id_length": len(app_id)}
+
+
 @router.get("/server-ip", summary="このサーバーの外部IPを確認する（認証不要）")
 async def get_server_ip() -> dict:
     """Railway サーバーの外部IPアドレスを返す（楽天IP制限設定用・認証不要）"""
