@@ -103,12 +103,14 @@ async def diagnose(
     # 楽天API テスト
     rakuten_result = await rakuten.test_connection()
 
-    # eBay API テスト（簡易）
+    # eBay Finding API テスト（本番エンドポイント）
     ebay_items = await ebay.find_completed_items("Pokemon cards Japan", max_results=3)
     ebay_result = {
         "ok": len(ebay_items) > 0,
         "items_found": len(ebay_items),
         "sample_price": ebay_items[0].sold_price_usd if ebay_items else None,
+        "endpoint": ebay.finding_url,
+        "app_id_prefix": settings.EBAY_CLIENT_ID[:15] + "..." if settings.EBAY_CLIENT_ID else None,
     }
 
     # サーバーIPも確認

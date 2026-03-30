@@ -13,7 +13,9 @@ from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
+# Finding APIは価格調査（読み取り専用）のため常に本番エンドポイントを使用
 FINDING_API_URL = "https://svcs.ebay.com/services/search/FindingService/v1"
+FINDING_API_URL_SANDBOX = "https://svcs.sandbox.ebay.com/services/search/FindingService/v1"
 
 
 @dataclass
@@ -44,6 +46,8 @@ class EbayFindingClient:
 
     def __init__(self):
         self.app_id = settings.EBAY_CLIENT_ID
+        # Finding APIは読み取り専用のため本番エンドポイントを使用（サンドボックスには実データなし）
+        self.finding_url = FINDING_API_URL
 
     async def find_completed_items(
         self,
@@ -86,7 +90,7 @@ class EbayFindingClient:
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.get(FINDING_API_URL, params=params)
+                resp = await client.get(self.finding_url, params=params)
                 resp.raise_for_status()
                 data = resp.json()
 
