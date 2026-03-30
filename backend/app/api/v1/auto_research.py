@@ -111,11 +111,22 @@ async def diagnose(
         "sample_price": ebay_items[0].sold_price_usd if ebay_items else None,
     }
 
+    # サーバーIPも確認
+    import httpx as _httpx
+    try:
+        async with _httpx.AsyncClient(timeout=5.0) as c:
+            ip_resp = await c.get("https://api.ipify.org?format=json")
+        server_ip = ip_resp.json().get("ip")
+    except Exception:
+        server_ip = "取得失敗"
+
     return {
         "rakuten": rakuten_result,
         "ebay": ebay_result,
         "rakuten_app_id_set": bool(settings.RAKUTEN_APP_ID),
+        "rakuten_access_key_set": bool(settings.RAKUTEN_ACCESS_KEY),
         "ebay_client_id_set": bool(settings.EBAY_CLIENT_ID),
+        "server_ip": server_ip,
     }
 
 

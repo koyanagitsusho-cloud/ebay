@@ -216,12 +216,23 @@ class RakutenClient:
                 )
 
             data = resp.json()
-            if "error" in data:
+
+            # 200以外はエラー詳細を返す
+            if resp.status_code != 200:
                 return {
                     "ok": False,
                     "http_status": resp.status_code,
-                    "error": data.get("error"),
+                    "response_body": data,
+                    "response_keys": list(data.keys()),
+                }
+
+            if "error" in data or "errors" in data:
+                return {
+                    "ok": False,
+                    "http_status": resp.status_code,
+                    "error": data.get("error") or data.get("errors"),
                     "error_description": data.get("error_description", ""),
+                    "response_body": data,
                 }
 
             count = data.get("count", 0)
